@@ -103,7 +103,6 @@ export const parseInfographicLocalReply = (raw: string, candidates: string[], pr
 };
 
 export const infographicLocalAgentErrorKey = (message: string, adapterId: string | null) => {
-  if (message === "workbuddy_credentials_unavailable") return "aiAssistant.agentSource.workbuddyCredentialsUnavailable";
   if (message === "needs_login") {
     return adapterId === "workbuddyCn" || adapterId === "workbuddyIntl"
       ? "aiAssistant.sidebar.workbuddyLoginRequired"

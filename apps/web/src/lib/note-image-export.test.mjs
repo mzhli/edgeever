@@ -68,12 +68,12 @@ describe("note image export helpers", () => {
     expect(midnightCss).toContain("JetBrains Mono");
   });
 
-  test("generates editorial theme with brand logo", () => {
+  test("generates notepad theme with tear strip, ruled lines, and brand logo", () => {
     const markup = buildNoteImageCardMarkup({
-      title: "Editorial Note",
+      title: "Notepad Note",
       notebook: "Work",
-      bodyHtml: "<p>New Yorker style editorial essay</p>",
-      theme: "editorial",
+      bodyHtml: "<p>Smartisan style note line</p>",
+      theme: "notepad",
       fontStyle: "serif",
       showTitle: true,
       showNotebook: false,
@@ -82,31 +82,30 @@ describe("note image export helpers", () => {
       showBranding: true,
     });
 
-    expect(markup).toContain('data-theme="editorial"');
+    expect(markup).toContain("edgeever-card-tear-strip");
     expect(markup).toContain("edgeever-brand-logo");
     expect(markup).not.toContain("edgeever-meta-notebook");
 
-    const editorialCss = generateCardCss({
-      theme: "editorial",
+    const notepadCss = generateCardCss({
+      theme: "notepad",
       fontStyle: "serif",
       fontSize: "lg",
       cardWidth: "standard",
     });
-    expect(editorialCss).toContain('data-theme="editorial"');
-    expect(editorialCss).toContain("edgeever-brand-logo");
+    expect(notepadCss).toContain("edgeever-card-tear-strip");
+    expect(notepadCss).toContain("edgeever-brand-logo");
   });
 
-  test("generates film theme with brand logo", () => {
+  test("generates xuan rice paper theme with brand logo", () => {
     const markup = buildNoteImageCardMarkup({
       title: "Poem Note",
-      bodyHtml: "<p>Kodak film aesthetic</p>",
-      theme: "film",
+      bodyHtml: "<p>东方诗意</p>",
+      theme: "xuan",
       fontStyle: "serif",
       showTitle: true,
       showBranding: true,
     });
 
-    expect(markup).toContain('data-theme="film"');
     expect(markup).toContain("edgeever-brand-logo");
   });
 });

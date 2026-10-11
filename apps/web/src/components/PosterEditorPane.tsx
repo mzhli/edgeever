@@ -1,4 +1,3 @@
-import { AI_ASSISTANT_LAUNCHER_POSITION } from "@/lib/ai-assistant-launcher";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -10,6 +9,7 @@ import {
   Hand,
   ImagePlus,
   LoaderCircle,
+  Maximize2,
   MousePointer2,
   PanelLeftClose,
   PanelRightClose,
@@ -48,7 +48,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -76,7 +75,7 @@ import {
   posterPrimitiveFromObject,
   platformFor,
 } from "@/lib/poster-design/templates";
-import { canRestorePosterDraft, classifyPosterUpdate, posterMemoContent, savePosterMemo } from "@/lib/poster-save";
+import { savePosterMemo } from "@/lib/poster-save";
 import { copyImageBlobToClipboard } from "@/lib/clipboard";
 import { compressImageForUpload } from "@/lib/image-compression";
 import {
@@ -200,7 +199,6 @@ export default function PosterEditorPane({
     title: string;
     document: PosterDocument;
     baseHash: string;
-    baseContent?: string;
     tagsText?: string;
   } | null>(null);
   const [, setHistoryVersion] = useState(0);
@@ -213,7 +211,6 @@ export default function PosterEditorPane({
   const selectionSync = useRef(false);
   const session = useRef<MemoEditSession | null>(null),
     currentMemo = useRef(memo);
-  const previousSaveBase = useRef<MemoDetail | null>(null);
   const current = useRef({ title, document, tagsText });
   current.current = { title, document, tagsText };
   const selected = useRef(selectedIds);
@@ -612,14 +609,8 @@ export default function PosterEditorPane({
   }, [memo.id, readOnly]);
 
   useEffect(() => {
-    const update = classifyPosterUpdate(memo, currentMemo.current, dirty, Boolean(saveLock.current), previousSaveBase.current);
-    if (update === "defer" || update === "ignore") return;
-    if (update === "rebase") {
-      // Advance optimistic checks while retaining any newer local edits.
-      currentMemo.current = memo;
-      return;
-    }
-    if (update === "conflict") {
+    if (memo.contentHash === currentMemo.current.contentHash) return;
+    if (dirty || saveLock.current) {
       setError(t("poster.remoteChanged"));
       return;
     }
@@ -649,7 +640,7 @@ export default function PosterEditorPane({
     undo.current = [];
     redo.current = [];
     setHistoryVersion((version) => version + 1);
-  }, [memo.contentHash, memo.revision, saving]);
+  }, [memo.contentHash]);
 
   useEffect(() => {
     const host = workbenchHost.current;
@@ -954,17 +945,15 @@ export default function PosterEditorPane({
           !data.document.previewResourceId
             ? await renderPosterBlob(data.document, readResource, "png", true)
             : undefined;
-        const saveBase = currentMemo.current;
         const result = await savePosterMemo(
           repository,
-          saveBase,
+          currentMemo.current,
           data.document,
           data.title,
           session.current!.id,
           preview,
           parseTagsText(data.tagsText),
         );
-        previousSaveBase.current = saveBase;
         currentMemo.current = result.memo;
         loadedArt.current = artwork(data.document);
         setSaved(captured);
@@ -1005,7 +994,6 @@ export default function PosterEditorPane({
           document,
           tagsText,
           baseHash: currentMemo.current.contentHash,
-          baseContent: posterMemoContent(currentMemo.current),
         }),
       );
     } catch {
@@ -1447,16 +1435,6 @@ export default function PosterEditorPane({
             {toast}
           </span>
         )}
-        {document.sourceMemoId && (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!editable || saving}
-            onClick={() => void insertInSource()}
-          >
-            {t("poster.insertSource")}
-          </Button>
-        )}
         {toolButton(
           t("poster.save"),
           saving ? (
@@ -1510,7 +1488,7 @@ export default function PosterEditorPane({
           <Button
             size="sm"
             onClick={() => {
-              if (!canRestorePosterDraft(recovery, currentMemo.current)) {
+              if (recovery.baseHash !== currentMemo.current.contentHash) {
                 setError(t("poster.remoteChanged"));
                 return;
               }
@@ -1593,39 +1571,6 @@ export default function PosterEditorPane({
             >
               {t("poster.design.customSize")}
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="shrink-0 gap-1 tabular-nums" aria-label={t("poster.design.zoom")}>
-                {Math.round(zoom * 100)}%
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel className="font-normal text-muted-foreground">
-              {document.width} × {document.height} px
-            </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => { setAutoFit(true); setZoom(fitZoom); }}>
-              {t("poster.design.fit")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => { setAutoFit(false); setZoom(Math.max(0.1, zoom / 1.2)); }}>
-              {t("poster.design.zoomOut")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => { setAutoFit(false); setZoom(Math.min(2, zoom * 1.2)); }}>
-              {t("poster.design.zoomIn")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {[0.25, 0.5, 0.75, 1, 1.5, 2].map((value) => (
-              <DropdownMenuItem key={value} onSelect={() => { setAutoFit(false); setZoom(value); }}>
-                {value * 100}%
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <p className="max-w-60 px-2 py-1.5 text-xs text-muted-foreground">
-              {t(selectedIds.length ? "poster.design.selectionCount" : "poster.design.canvasHint", { count: selectedIds.length })}
-            </p>
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="mx-1 h-5 border-l" />
@@ -2023,6 +1968,80 @@ export default function PosterEditorPane({
           </aside>
         )}
       </div>
+      <footer className="flex h-11 shrink-0 items-center gap-2 border-t px-4 text-[11px] text-slate-500">
+        <span>
+          {document.width} × {document.height} px
+        </span>
+        <span className="hidden truncate md:inline">
+          ·{" "}
+          {t(
+            selectedIds.length
+              ? "poster.design.selectionCount"
+              : "poster.design.canvasHint",
+            { count: selectedIds.length },
+          )}
+        </span>
+        {document.sourceMemoId && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!editable || saving}
+            onClick={() => void insertInSource()}
+          >
+            {t("poster.insertSource")}
+          </Button>
+        )}
+        <div className="flex-1" />
+        <button
+          className="h-7 w-7 rounded hover:bg-slate-100"
+          aria-label={t("poster.design.zoomOut")}
+          onClick={() => {
+            setAutoFit(false);
+            setZoom(Math.max(0.1, zoom / 1.2));
+          }}
+        >
+          −
+        </button>
+        <select
+          aria-label={t("poster.design.zoom")}
+          className="h-7 rounded border bg-card px-1 text-xs"
+          value={zoom.toFixed(3)}
+          onChange={(event) => {
+            setAutoFit(false);
+            setZoom(Number(event.target.value));
+          }}
+        >
+          <option value={zoom.toFixed(3)}>{Math.round(zoom * 100)}%</option>
+          {[0.25, 0.5, 0.75, 1, 1.5, 2]
+            .filter((value) => value.toFixed(3) !== zoom.toFixed(3))
+            .map((value) => (
+              <option key={value} value={value.toFixed(3)}>
+                {value * 100}%
+              </option>
+            ))}
+        </select>
+        <button
+          className="h-7 w-7 rounded hover:bg-slate-100"
+          aria-label={t("poster.design.zoomIn")}
+          onClick={() => {
+            setAutoFit(false);
+            setZoom(Math.min(2, zoom * 1.2));
+          }}
+        >
+          +
+        </button>
+        {toolButton(
+          t("poster.design.fit"),
+          <Maximize2 className="h-3.5 w-3.5" />,
+          () => {
+            setAutoFit(true);
+            setZoom(fitZoom);
+          },
+          false,
+          false,
+          true,
+        )}
+      </footer>
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -2096,7 +2115,7 @@ export default function PosterEditorPane({
       </Dialog>
       {!readOnly && !aiAssistantOpen && <IconTooltip side="left" label={t("aiAssistant.open")}>
         <Button variant="outline" size="icon" data-ai-assistant-launcher="" aria-label={t("aiAssistant.open")}
-          className={`${AI_ASSISTANT_LAUNCHER_POSITION} absolute z-30 size-11 rounded-full border-slate-200 bg-card text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.14)]`}
+          className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-30 size-11 rounded-full border-slate-200 bg-card text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.14)]"
           onClick={() => setAiSidebarOpen(true)}><Sparkles className="size-5" strokeWidth={1.75} /></Button>
       </IconTooltip>}
     </div>

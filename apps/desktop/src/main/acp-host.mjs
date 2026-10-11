@@ -723,7 +723,7 @@ export function createAcpHostRuntime(options = {}) {
     return adapt(resolveAcpCommand(input, commandDeps));
   };
 
-  const connect = async (command, requestId, emit, signal, authMethodId, mcpServers = [], allowPermissions = false, workBuddyAuth = null, verifyWorkBuddy = false) => {
+  const connect = async (command, requestId, emit, signal, authMethodId, mcpServers = [], allowPermissions = false, workBuddyAuth = null) => {
     const cwd = await createAcpWorkspace(mkdtempImpl, options.tmpRoot);
     let child = null;
     let authMethods = [];
@@ -739,18 +739,10 @@ export function createAcpHostRuntime(options = {}) {
       void connection.closed?.catch(() => {});
       const initialized = await connection.initialize(acpInitializeParams(version));
       authMethods = publicAuthMethods(initialized);
-      const readCredential = async () => {
-        const result = await connection.extMethod("_codebuddy.ai/getUserInfo", {});
-        const token = result?.userInfo?.accessToken ?? result?.userInfo?.token;
-        // The bundled CLI can restore account metadata without decrypting tokens.
-        if (result?.userInfo && !(typeof token === "string" && token)) throw new Error("workbuddy_credentials_unavailable");
-        return typeof token === "string" && token ? createHash("sha256").update(token).digest("hex") : null;
-      };
-      if (verifyWorkBuddy) await readCredential();
       if (authMethodId) {
         if (!authMethods.some((method) => method.id === authMethodId)) throw new Error("invalid_auth_method");
         authenticationPending = true;
-        if (workBuddyAuth) await authenticateWorkBuddy(workBuddyAuth, authMethodId, signal, { readCredential });
+        if (workBuddyAuth) await authenticateWorkBuddy(workBuddyAuth, authMethodId, signal);
         else await connection.authenticate({ methodId: authMethodId });
         authenticationPending = false;
       }
@@ -875,7 +867,7 @@ export function createAcpHostRuntime(options = {}) {
       if (!resolved.ok) return adapterFromResolution(id, resolved);
       let connected;
       try {
-        connected = await withHandshakeTimeout((signal) => connect(resolved.command, `probe-${id}`, () => {}, signal, undefined, [], false, null, id === "workbuddyCn" || id === "workbuddyIntl"));
+        connected = await withHandshakeTimeout((signal) => connect(resolved.command, `probe-${id}`, () => {}, signal));
       } catch (error) {
         const failure = { ...adapterShell(id), ...failureFields(classifyAcpFailure(error)), ...(isAuthRequiredError(error) ? { authMethods: error.authMethods ?? [] } : {}), ...(resolved.version ? { version: resolved.version, managed: true } : {}) };
         latestStatus.set(id, failure);
@@ -906,13 +898,6 @@ export function createAcpHostRuntime(options = {}) {
           const workBuddyAuth = id === "workbuddyCn" || id === "workbuddyIntl" ? await prepareWorkBuddyAuth(resolved.command) : null;
           return connect(workBuddyAuth?.command ?? resolved.command, `auth-${id}`, () => {}, signal, input.methodId, [], false, workBuddyAuth);
         }, authenticationTimeoutMs);
-        if (id === "workbuddyCn" || id === "workbuddyIntl") {
-          connected.stop();
-          await removeAcpWorkspace(connected.cwd, rmImpl);
-          connected = null;
-          // Login is useful only if a fresh chat process can restore credentials.
-          connected = await withHandshakeTimeout((signal) => connect(resolved.command, `auth-check-${id}`, () => {}, signal, undefined, [], false, null, true));
-        }
         const adapter = { ...adapterShell(id), state: "available", promptCapabilities: connected.promptCapabilities, authMethods: connected.authMethods, ...(resolved.version ? { version: resolved.version, managed: true } : {}) };
         latestStatus.set(id, adapter);
         return adapter;
@@ -966,7 +951,7 @@ export function createAcpHostRuntime(options = {}) {
       try {
         connected = await withHandshakeTimeout((signal) => connect(
           resolved.command, requestId, notify, signal, undefined,
-          mcpBridge ? [mcpServerFor(mcpBridge)] : [], true, null, input.adapterId === "workbuddyCn" || input.adapterId === "workbuddyIntl",
+          mcpBridge ? [mcpServerFor(mcpBridge)] : [], true,
         ));
         rememberPromptStatus({
           state: "available",

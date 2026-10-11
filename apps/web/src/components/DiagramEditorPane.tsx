@@ -1,4 +1,3 @@
-import { AI_ASSISTANT_LAUNCHER_POSITION } from "@/lib/ai-assistant-launcher";
 import { diagramEditorSnapshot } from "@/lib/diagram-editor-snapshot";
 import { formatMindMapOutline, projectMindMapOutline, updateMindMapOutlineDraft, type MindMapOutlineDraft, type MindMapOutlineError } from "@/lib/mind-map-outline";
 import { MindMapOutlineEditor } from "@/components/MindMapOutlineEditor";
@@ -3911,7 +3910,7 @@ export const DiagramEditorPane = ({
               variant="outline"
               size="icon"
               data-ai-assistant-launcher=""
-              className={`${AI_ASSISTANT_LAUNCHER_POSITION} absolute z-30 size-11 rounded-full border-slate-200 bg-card text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.14)] hover:bg-card hover:text-slate-950`}
+              className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-30 size-11 rounded-full border-slate-200 bg-card text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.14)] hover:bg-card hover:text-slate-950"
               aria-label={t("aiAssistant.open")}
               onClick={() => {
                 setAiSidebarOpen(true);
